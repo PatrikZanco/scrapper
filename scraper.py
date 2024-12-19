@@ -7,10 +7,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 
-
+ 
 DEBUG = True
-
-
 def get_all_percentages_from_page(url) -> list:
     try:
         with sync_playwright() as p:

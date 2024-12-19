@@ -3,8 +3,13 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 from playwright.sync_api import sync_playwright
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+
 
 DEBUG = True
+
 
 def get_all_percentages_from_page(url) -> list:
     try:
@@ -12,15 +17,18 @@ def get_all_percentages_from_page(url) -> list:
             browser = p.chromium.launch(headless=False)
             page = browser.new_page()
             page.goto(url)
-            page.wait_for_selector('span.common-flucs-graph__percentage', state='visible')
+            page.wait_for_selector(
+                'span.common-flucs-graph__percentage', state='visible')
             html = page.content()
             soup = BeautifulSoup(html, 'html.parser')
-            percentage_tags = soup.find_all('span', class_='common-flucs-graph__percentage')
+            percentage_tags = soup.find_all(
+                'span', class_='common-flucs-graph__percentage')
             percentages = [tag.text.strip() for tag in percentage_tags]
             return percentages
     except Exception as e:
         print(f"An error occurred: {e}")
         return []
+
 
 def get_all_opens_from_page(url) -> list:
     try:
@@ -33,7 +41,8 @@ def get_all_opens_from_page(url) -> list:
             soup = BeautifulSoup(html, 'html.parser')
             for tag in soup.find_all('tr', attrs={'data-v-7151d989': True}):
                 tag.decompose()
-            divs = soup.find_all('div', class_='form-guide-overview-insight-card__content-item')
+            divs = soup.find_all(
+                'div', class_='form-guide-overview-insight-card__content-item')
 
             open_values = []
 
@@ -52,6 +61,8 @@ def get_all_opens_from_page(url) -> list:
 def scrape_race_info():
     # URL of the race
     url = "https://www.punters.com.au/form-guide/horses/bendigo-20241203/apiam-animal-health-mdn-plate-race-1/"
+    driver = webdriver.Chrome()
+    driver = driver.get(url=url)
 
     try:
 
@@ -71,7 +82,6 @@ def scrape_race_info():
         if DEBUG:
             print(percentages)
             print(open_val)
-
 
         # Dictionary to store all page information
         page_data = {
@@ -101,7 +111,8 @@ def scrape_race_info():
                 page_data['main_content']['race_name'] = race_name.text.strip()
 
             # Race details
-            race_details = main_content.find_all(['div', 'p'], class_=lambda x: x and 'race' in x.lower())
+            race_details = main_content.find_all(
+                ['div', 'p'], class_=lambda x: x and 'race' in x.lower())
             page_data['race_details'] = {
                 'details': [detail.get_text(strip=True) for detail in race_details if detail.get_text(strip=True)]
             }
@@ -113,7 +124,8 @@ def scrape_race_info():
                 headers = []
                 header_row = horse_table.find('tr')
                 if header_row:
-                    headers = [th.get_text(strip=True) for th in header_row.find_all(['th', 'td'])]
+                    headers = [th.get_text(strip=True)
+                               for th in header_row.find_all(['th', 'td'])]
 
                 # As porcentagems estao na ordem que aparecem
                 counter = 0
@@ -127,26 +139,42 @@ def scrape_race_info():
 
                     horse_data = {}
                     cells = row.find_all(['td', 'th'])
+
                     for i, cell in enumerate(cells):
                         # Captura do percentual
-                        flucs_element = cell.select_one('.common-flucs-graph__percentage')
-                        if counter < len(percentages):
-                            horse_data['flucs_percentage'] = percentages[counter]
+                        flucs_element = cell.select(
+                            'span.common-flucs-graph__percentage')
+                        if flucs_element:
+                            flucs_element = cell.select_one(
+                                'span.common-flucs-graph__percentage').replace('%', '')
+                            return int(flucs_element)
 
                         # Captura do valor de Open
-                        open_element = cell.select_one('.form-guide-overview-insight-card__content-item')
-                        if open_element:
-                            spans = open_element.find_all('span')
-                            if len(spans) > 1 and spans[0].text.strip() == "Open":
-                                horse_data['Open'] = spans[1].text.strip()
+                        try:
+                            button = driver.find_element(
+                                By.CSS_SELECTOR, "button.form-guide-overview-selection__toggle-button")
+                            button = button.click()
+
+                            open_element = cell.select_one(
+                                'div.form-guide-overview-insight-card__content-item')
+                            if open_element:
+                                spans = open_element.find_all('span')
+                                if len(spans) > 1 and spans[0].text.strip() == "Open":
+                                    horse_data['Open'] = spans[1].text.strip()
+
+                        except Exception as e:
+                            return f'Error: {e}'
 
                         # Captura de Odds
-                        odds_element = cell.select_one('.form-guide-overview-selection__odds')
+                        odds_element = cell.select_one(
+                            '.form-guide-overview-selection__odds')
                         if odds_element:
                             horse_data['Odds'] = odds_element.text.strip()
 
                         # Captura do Rating
-                        rating_element = cell.select_one('.some-class-for-rating')  # Ajuste o seletor para o correto
+                        # Ajuste o seletor para o correto
+                        rating_element = cell.select_one(
+                            '.some-class-for-rating')
                         if rating_element:
                             horse_data['Rating'] = rating_element.text.strip()
 
@@ -154,16 +182,19 @@ def scrape_race_info():
                         print(horse_data)
 
                         # Get all text content including nested elements
-                        cell_content = cell.get_text(separator=' | ', strip=True)
+                        cell_content = cell.get_text(
+                            separator=' | ', strip=True)
                         if i < len(headers):
-                            horse_data[headers[i] if headers else f'column_{i}'] = cell_content
+                            horse_data[headers[i]
+                                       if headers else f'column_{i}'] = cell_content
                         else:
                             horse_data[f'additional_column_{i}'] = cell_content
 
                         # Get any links in the cell
                         links = cell.find_all('a')
                         if links:
-                            horse_data[f'links_{i}'] = [{'text': a.text.strip(), 'href': a.get('href', '')} for a in links]
+                            horse_data[f'links_{i}'] = [
+                                {'text': a.text.strip(), 'href': a.get('href', '')} for a in links]
 
                     # contador para porcentagens
                     counter = counter + 1
@@ -191,7 +222,8 @@ def scrape_race_info():
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(page_data, f, indent=4, ensure_ascii=False)
 
-        print(f"Complete page data successfully scraped and saved to {filename}")
+        print(
+            f"Complete page data successfully scraped and saved to {filename}")
         return page_data
 
     except requests.RequestException as e:
@@ -200,6 +232,7 @@ def scrape_race_info():
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
+
 
 if __name__ == "__main__":
     scrape_race_info()

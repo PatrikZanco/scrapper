@@ -31,11 +31,14 @@ def get_all_opens_from_page(url) -> list:
             page.wait_for_load_state('load')
             html = page.content()
             soup = BeautifulSoup(html, 'html.parser')
+            for tag in soup.find_all('tr', attrs={'data-v-7151d989': True}):
+                tag.decompose()
             divs = soup.find_all('div', class_='form-guide-overview-insight-card__content-item')
 
             open_values = []
 
             for div in divs:
+                print(div)
                 spans = div.find_all('span')
                 if spans and spans[0].text.strip() == "Open":
                     open_values.append(spans[1].text.strip())
@@ -105,6 +108,7 @@ def scrape_race_info():
 
             # Horse information table
             horse_table = main_content.find('table')
+
             if horse_table:
                 headers = []
                 header_row = horse_table.find('tr')
@@ -114,7 +118,13 @@ def scrape_race_info():
                 # As porcentagems estao na ordem que aparecem
                 counter = 0
 
-                for row in horse_table.find_all('tr')[1:]:  # Skip header row
+                table = horse_table.find_all('tr')[1:]
+                table = [table[i] for i in range(len(table)) if i % 2 == 0]
+
+                for row in table:  # Skip header row
+
+                    print(type(horse_table.find_all('tr')))
+
                     horse_data = {}
                     cells = row.find_all(['td', 'th'])
                     for i, cell in enumerate(cells):
@@ -141,8 +151,7 @@ def scrape_race_info():
                             horse_data['Rating'] = rating_element.text.strip()
 
                         # Verificação de dados capturados
-                        if DEBUG:
-                            print("horse_data")
+                        print(horse_data)
 
                         # Get all text content including nested elements
                         cell_content = cell.get_text(separator=' | ', strip=True)

@@ -156,6 +156,7 @@ def scrape_race_info():
                         if links:
                             horse_data[f'links_{i}'] = [{'text': a.text.strip(), 'href': a.get('href', '')} for a in links]
 
+                    # contador para porcentagens
                     counter = counter + 1
 
                     if horse_data:
